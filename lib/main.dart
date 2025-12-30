@@ -1,269 +1,172 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
 
 Future<void> main() async {
+  // Wajib untuk inisialisasi plugin sebelum app running
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
-  runApp(const MyApp());
+  
+  try {
+    // Memuat file .env
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    debugPrint("Peringatan: File .env tidak ditemukan atau gagal dimuat.");
+  }
+  
+  runApp(const KediNavApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class KediNavApp extends StatelessWidget {
+  const KediNavApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'KediNav AI',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        scaffoldBackgroundColor: const Color(0xFFF7F4FA),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF6C63FF),
-          foregroundColor: Colors.white,
-          elevation: 0,
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
+        useMaterial3: true,
       ),
-      home: const ChatPage(),
+      home: const ChatAiScreen(),
     );
   }
 }
 
-class ChatPage extends StatefulWidget {
-  const ChatPage({super.key});
+class ChatAiScreen extends StatefulWidget {
+  const ChatAiScreen({super.key});
 
   @override
-  State<ChatPage> createState() => _ChatPageState();
+  State<ChatAiScreen> createState() => _ChatAiScreenState();
 }
 
-class _ChatPageState extends State<ChatPage> {
+class _ChatAiScreenState extends State<ChatAiScreen> {
   final TextEditingController _controller = TextEditingController();
+  final List<Map<String, String>> _messages = [];
+  bool _isLoading = false;
 
-  String _response = "Silakan tanya sejarah Indonesia.";
-  bool _loading = false;
-  String? _modelName;
+  // Mengambil API Key dari .env
+  final String _apiKey = dotenv.env['GEMINI_API_KEY'] ?? "";
 
-  // ============================
-  // LOAD MODEL (TIDAK DIUBAH)
-  // ============================
-  Future<void> _loadValidModel(String apiKey) async {
-    final uri = Uri.parse(
-      "https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey",
-    );
-
-    final res = await http.get(uri);
-    if (res.statusCode != 200) {
-      throw Exception("Gagal mengambil daftar model: ${res.body}");
-    }
-
-    final data = jsonDecode(res.body);
-    final models = data["models"] as List<dynamic>;
-
-    for (final m in models) {
-      final methods = (m["supportedGenerationMethods"] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          [];
-      if (methods.contains("generateContent")) {
-        _modelName = m["name"];
-        break;
-      }
-    }
-
-    if (_modelName == null) {
-      throw Exception("Tidak ada model yang mendukung generateContent.");
-    }
-  }
-
-  // ============================
-  // ASK AI (TIDAK DIUBAH)
-  // ============================
-  Future<void> _askAI(String question) async {
-    if (question.trim().isEmpty) return;
-
-    final apiKey = dotenv.env['GEMINI_API_KEY'];
-    if (apiKey == null || apiKey.isEmpty) {
-      setState(() {
-        _response = "❌ API Key tidak ditemukan di .env";
-      });
+  Future<void> _sendMessage() async {
+    if (_controller.text.trim().isEmpty) return;
+    
+    // Validasi API Key sederhana
+    if (_apiKey.isEmpty || _apiKey == "ISI_API_KEY_DISINI") {
+      _showError("API Key Gemini belum diatur di file .env");
       return;
     }
 
+    String userPrompt = _controller.text;
     setState(() {
-      _loading = true;
-      _response = "⏳ AI sedang berpikir...";
+      _messages.add({"role": "user", "text": userPrompt});
+      _isLoading = true;
     });
+    _controller.clear();
 
     try {
-      _modelName ??= (await () async {
-        await _loadValidModel(apiKey);
-        return _modelName!;
-      }());
-
-      final uri = Uri.parse(
-        "https://generativelanguage.googleapis.com/v1beta/$_modelName:generateContent?key=$apiKey",
+      final model = GenerativeModel(
+        model: 'gemini-1.5-flash',
+        apiKey: _apiKey,
       );
 
-      final res = await http.post(
-        uri,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "contents": [
-            {
-              "parts": [
-                {
-                  "text":
-                      "Kamu adalah pakar sejarah Indonesia. Jawab dengan jelas:\n$question"
-                }
-              ]
-            }
-          ]
-        }),
-      );
-
-      if (res.statusCode != 200) {
-        throw Exception("API Error ${res.statusCode}: ${res.body}");
-      }
-
-      final data = jsonDecode(res.body);
+      final content = [
+        Content.text("Kamu adalah asisten ahli sekolah kedinasan Indonesia. Jawab pertanyaan ini: $userPrompt")
+      ];
+      
+      final response = await model.generateContent(content);
+      
       setState(() {
-        _response =
-            data["candidates"]?[0]?["content"]?["parts"]?[0]?["text"] ??
-                "⚠️ Tidak ada jawaban dari AI.";
+        _messages.add({
+          "role": "ai", 
+          "text": response.text ?? "Maaf, asisten AI tidak memberikan respon."
+        });
       });
     } catch (e) {
-      setState(() {
-        _response = "❌ Error: $e";
-      });
+      _showError("Gagal terhubung ke AI. Cek koneksi internet.");
     } finally {
-      setState(() {
-        _loading = false;
-        _controller.clear();
-      });
+      setState(() => _isLoading = false);
     }
   }
 
-  // ============================
-  // UI DENGAN AVATAR AI
-  // ============================
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Pakar Sejarah AI"),
-        centerTitle: true,
+        // Judul disesuaikan dengan pencarian di widget_test.dart
+        title: const Text("KediNav AI Consultant", style: TextStyle(color: Colors.white, fontSize: 18)),
+        backgroundColor: Colors.indigo,
+        elevation: 2,
       ),
       body: Column(
         children: [
-          // CHAT AI
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // AVATAR AI
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: const LinearGradient(
-                        colors: [
-                          Color(0xFF6C63FF),
-                          Color(0xFF8F88FF),
-                        ],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.smart_toy_outlined,
-                      color: Colors.white,
+            child: _messages.isEmpty 
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(20.0),
+                    // TEKS INI WAJIB SAMA PERSIS DENGAN YANG ADA DI TEST
+                    child: Text(
+                      "Silakan tanya seputar info kedinasan (STAN, IPDN, STIS, dll)",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey, fontSize: 16),
                     ),
                   ),
-
-                  const SizedBox(width: 12),
-
-                  // CHAT BUBBLE AI
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.06),
-                            blurRadius: 12,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      child: SingleChildScrollView(
-                        child: Text(
-                          _response,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            height: 1.6,
-                          ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _messages.length,
+                  itemBuilder: (context, index) {
+                    final msg = _messages[index];
+                    bool isUser = msg["role"] == "user";
+                    return Align(
+                      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 5),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isUser ? Colors.indigo[100] : Colors.grey[200],
+                          borderRadius: BorderRadius.circular(15),
                         ),
+                        constraints: BoxConstraints(
+                          maxWidth: MediaQuery.of(context).size.width * 0.75
+                        ),
+                        child: Text(msg["text"]!),
                       ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+                    );
+                  },
+                ),
           ),
-
-          if (_loading)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: LinearProgressIndicator(minHeight: 3),
-            ),
-
-          // INPUT
+          if (_isLoading) const LinearProgressIndicator(),
+          // Input Field
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(30),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 10,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      decoration: const InputDecoration(
-                        hintText: "Tanyakan sejarah Indonesia...",
-                        border: InputBorder.none,
-                      ),
-                      onSubmitted: _askAI,
+            padding: const EdgeInsets.all(12.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    onSubmitted: (_) => _sendMessage(),
+                    decoration: InputDecoration(
+                      hintText: "Tanya syarat STAN / IPDN...",
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(25)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.send,
-                      color: Color(0xFF6C63FF),
-                    ),
-                    onPressed: () => _askAI(_controller.text),
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 8),
+                FloatingActionButton(
+                  onPressed: _sendMessage,
+                  mini: true,
+                  child: const Icon(Icons.send),
+                ),
+              ],
             ),
           ),
         ],
