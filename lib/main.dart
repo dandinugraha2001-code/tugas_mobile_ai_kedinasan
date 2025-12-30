@@ -44,7 +44,7 @@ class _ChatPageState extends State<ChatPage> {
   String? _modelName;
 
   // ============================
-  // LOAD MODEL VALID (TIDAK DIUBAH)
+  // LOAD MODEL (TIDAK DIUBAH)
   // ============================
   Future<void> _loadValidModel(String apiKey) async {
     final uri = Uri.parse(
@@ -144,7 +144,7 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   // ============================
-  // UI CHAT MODERN
+  // UI DENGAN AVATAR AI
   // ============================
   @override
   Widget build(BuildContext context) {
@@ -155,48 +155,79 @@ class _ChatPageState extends State<ChatPage> {
       ),
       body: Column(
         children: [
-          // CHAT AREA
+          // CHAT AI
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Align(
-                alignment: Alignment.topLeft,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
-                        blurRadius: 12,
-                        offset: const Offset(0, 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // AVATAR AI
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFF6C63FF),
+                          Color(0xFF8F88FF),
+                        ],
                       ),
-                    ],
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.15),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.smart_toy_outlined,
+                      color: Colors.white,
+                    ),
                   ),
-                  child: SingleChildScrollView(
-                    child: Text(
-                      _response,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        height: 1.6,
+
+                  const SizedBox(width: 12),
+
+                  // CHAT BUBBLE AI
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.06),
+                            blurRadius: 12,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: SingleChildScrollView(
+                        child: Text(
+                          _response,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            height: 1.6,
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
 
-          // LOADING BAR
           if (_loading)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
               child: LinearProgressIndicator(minHeight: 3),
             ),
 
-          // INPUT AREA
+          // INPUT
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
             child: Container(
@@ -218,7 +249,7 @@ class _ChatPageState extends State<ChatPage> {
                     child: TextField(
                       controller: _controller,
                       decoration: const InputDecoration(
-                        hintText: "Contoh: Kapan Indonesia merdeka?",
+                        hintText: "Tanyakan sejarah Indonesia...",
                         border: InputBorder.none,
                       ),
                       onSubmitted: _askAI,
