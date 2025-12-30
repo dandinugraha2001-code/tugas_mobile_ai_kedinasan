@@ -6,184 +6,236 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
-  runApp(const AIChatApp());
+  runApp(const MyApp());
 }
 
-class AIChatApp extends StatelessWidget {
-  const AIChatApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        fontFamily: 'Roboto',
-        useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFFF7F4FA),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF6C63FF),
+          foregroundColor: Colors.white,
+          elevation: 0,
+        ),
       ),
-      home: const ChatScreen(),
+      home: const ChatPage(),
     );
   }
 }
 
-class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key});
+class ChatPage extends StatefulWidget {
+  const ChatPage({super.key});
 
   @override
-  State<ChatScreen> createState() => _ChatScreenState();
+  State<ChatPage> createState() => _ChatPageState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatPageState extends State<ChatPage> {
   final TextEditingController _controller = TextEditingController();
-  final List<Map<String, String>> _messages = [];
-  bool _isTyping = false;
 
-  Future<void> _sendMessage(String text) async {
-    if (text.trim().isEmpty) return;
+  String _response = "Silakan tanya sejarah Indonesia.";
+  bool _loading = false;
+  String? _modelName;
 
-    setState(() {
-      _messages.add({"role": "user", "text": text});
-      _isTyping = true;
-    });
+  // ============================
+  // LOAD MODEL VALID (TIDAK DIUBAH)
+  // ============================
+  Future<void> _loadValidModel(String apiKey) async {
+    final uri = Uri.parse(
+      "https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey",
+    );
 
-    _controller.clear();
+    final res = await http.get(uri);
+    if (res.statusCode != 200) {
+      throw Exception("Gagal mengambil daftar model: ${res.body}");
+    }
 
-    // ==== SIMULASI AI (GANTI DENGAN API GEMINI KAMU) ====
-    await Future.delayed(const Duration(seconds: 2));
-    setState(() {
-      _messages.add({
-        "role": "ai",
-        "text":
-            "Indonesia merdeka pada tanggal 17 Agustus 1945 yang diproklamasikan oleh Ir. Soekarno dan Mohammad Hatta."
-      });
-      _isTyping = false;
-    });
+    final data = jsonDecode(res.body);
+    final models = data["models"] as List<dynamic>;
+
+    for (final m in models) {
+      final methods = (m["supportedGenerationMethods"] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          [];
+      if (methods.contains("generateContent")) {
+        _modelName = m["name"];
+        break;
+      }
+    }
+
+    if (_modelName == null) {
+      throw Exception("Tidak ada model yang mendukung generateContent.");
+    }
   }
 
+  // ============================
+  // ASK AI (TIDAK DIUBAH)
+  // ============================
+  Future<void> _askAI(String question) async {
+    if (question.trim().isEmpty) return;
+
+    final apiKey = dotenv.env['GEMINI_API_KEY'];
+    if (apiKey == null || apiKey.isEmpty) {
+      setState(() {
+        _response = "❌ API Key tidak ditemukan di .env";
+      });
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _response = "⏳ AI sedang berpikir...";
+    });
+
+    try {
+      _modelName ??= (await () async {
+        await _loadValidModel(apiKey);
+        return _modelName!;
+      }());
+
+      final uri = Uri.parse(
+        "https://generativelanguage.googleapis.com/v1beta/$_modelName:generateContent?key=$apiKey",
+      );
+
+      final res = await http.post(
+        uri,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "contents": [
+            {
+              "parts": [
+                {
+                  "text":
+                      "Kamu adalah pakar sejarah Indonesia. Jawab dengan jelas:\n$question"
+                }
+              ]
+            }
+          ]
+        }),
+      );
+
+      if (res.statusCode != 200) {
+        throw Exception("API Error ${res.statusCode}: ${res.body}");
+      }
+
+      final data = jsonDecode(res.body);
+      setState(() {
+        _response =
+            data["candidates"]?[0]?["content"]?["parts"]?[0]?["text"] ??
+                "⚠️ Tidak ada jawaban dari AI.";
+      });
+    } catch (e) {
+      setState(() {
+        _response = "❌ Error: $e";
+      });
+    } finally {
+      setState(() {
+        _loading = false;
+        _controller.clear();
+      });
+    }
+  }
+
+  // ============================
+  // UI CHAT MODERN
+  // ============================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xff0F172A),
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          "Pakar Sejarah AI",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text("Pakar Sejarah AI"),
         centerTitle: true,
       ),
       body: Column(
         children: [
+          // CHAT AREA
           Expanded(
-            child: ListView.builder(
+            child: Padding(
               padding: const EdgeInsets.all(16),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final msg = _messages[index];
-                final isUser = msg["role"] == "user";
-                return ChatBubble(
-                  text: msg["text"]!,
-                  isUser: isUser,
-                );
-              },
-            ),
-          ),
-
-          if (_isTyping)
-            const Padding(
-              padding: EdgeInsets.only(left: 16, bottom: 8),
               child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  "AI sedang mengetik...",
-                  style: TextStyle(color: Colors.white70),
+                alignment: Alignment.topLeft,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.06),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: SingleChildScrollView(
+                    child: Text(
+                      _response,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        height: 1.6,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
+          ),
 
-          _buildInputArea(),
-        ],
-      ),
-    );
-  }
+          // LOADING BAR
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: LinearProgressIndicator(minHeight: 3),
+            ),
 
-  Widget _buildInputArea() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: const BoxDecoration(
-        color: Color(0xff020617),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _controller,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: "Tanyakan sejarah Indonesia...",
-                hintStyle: const TextStyle(color: Colors.white54),
-                filled: true,
-                fillColor: const Color(0xff020617),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(25),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 20),
+          // INPUT AREA
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(30),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 10,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
               ),
-              onSubmitted: _sendMessage,
-            ),
-          ),
-          const SizedBox(width: 8),
-          CircleAvatar(
-            backgroundColor: Colors.blueAccent,
-            child: IconButton(
-              icon: const Icon(Icons.send, color: Colors.white),
-              onPressed: () => _sendMessage(_controller.text),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      decoration: const InputDecoration(
+                        hintText: "Contoh: Kapan Indonesia merdeka?",
+                        border: InputBorder.none,
+                      ),
+                      onSubmitted: _askAI,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.send,
+                      color: Color(0xFF6C63FF),
+                    ),
+                    onPressed: () => _askAI(_controller.text),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class ChatBubble extends StatelessWidget {
-  final String text;
-  final bool isUser;
-
-  const ChatBubble({
-    super.key,
-    required this.text,
-    required this.isUser,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment:
-          isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        padding: const EdgeInsets.all(14),
-        constraints: const BoxConstraints(maxWidth: 280),
-        decoration: BoxDecoration(
-          color: isUser
-              ? Colors.blueAccent
-              : const Color(0xff1E293B),
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft:
-                isUser ? const Radius.circular(16) : Radius.zero,
-            bottomRight:
-                isUser ? Radius.zero : const Radius.circular(16),
-          ),
-        ),
-        child: Text(
-          text,
-          style: const TextStyle(color: Colors.white),
-        ),
       ),
     );
   }
