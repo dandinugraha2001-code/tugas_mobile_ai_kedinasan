@@ -2,169 +2,144 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 
-Future<void> main() async {
-  // Wajib untuk inisialisasi plugin sebelum app running
+void main() async {
+  // Pastikan widget binding diinisialisasi sebelum memuat .env
   WidgetsFlutterBinding.ensureInitialized();
   
+  // Memuat API Key dari file .env
   try {
-    // Memuat file .env
     await dotenv.load(fileName: ".env");
   } catch (e) {
-    debugPrint("Peringatan: File .env tidak ditemukan atau gagal dimuat.");
+    debugPrint("File .env tidak ditemukan, pastikan sudah dibuat.");
   }
-  
-  runApp(const KediNavApp());
+
+  runApp(const InfoKedinasanApp());
 }
 
-class KediNavApp extends StatelessWidget {
-  const KediNavApp({super.key});
+class InfoKedinasanApp extends StatelessWidget {
+  const InfoKedinasanApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'KediNav AI',
       debugShowCheckedModeBanner: false,
+      title: 'Info Kedinasan AI',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo.shade900),
         useMaterial3: true,
       ),
-      home: const ChatAiScreen(),
+      home: const ChatScreen(),
     );
   }
 }
 
-class ChatAiScreen extends StatefulWidget {
-  const ChatAiScreen({super.key});
+class ChatScreen extends StatefulWidget {
+  const ChatScreen({super.key});
 
   @override
-  State<ChatAiScreen> createState() => _ChatAiScreenState();
+  State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatAiScreenState extends State<ChatAiScreen> {
+class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, String>> _messages = [];
   bool _isLoading = false;
 
   // Mengambil API Key dari .env
-  final String _apiKey = dotenv.env['GEMINI_API_KEY'] ?? "";
+  final String apiKey = dotenv.env['GEMINI_API_KEY'] ?? "API_KEY_TIDAK_DITEMUKAN";
 
-  Future<void> _sendMessage() async {
-    if (_controller.text.trim().isEmpty) return;
-    
-    // Validasi API Key sederhana
-    if (_apiKey.isEmpty || _apiKey == "ISI_API_KEY_DISINI") {
-      _showError("API Key Gemini belum diatur di file .env");
-      return;
-    }
+  void _sendMessage() async {
+    final text = _controller.text;
+    if (text.isEmpty) return;
 
-    String userPrompt = _controller.text;
     setState(() {
-      _messages.add({"role": "user", "text": userPrompt});
+      _messages.add({"role": "user", "text": text});
       _isLoading = true;
     });
-    _controller.clear();
 
     try {
-      final model = GenerativeModel(
-        model: 'gemini-1.5-flash',
-        apiKey: _apiKey,
-      );
-
-      final content = [
-        Content.text("Kamu adalah asisten ahli sekolah kedinasan Indonesia. Jawab pertanyaan ini: $userPrompt")
-      ];
+      final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: apiKey);
       
+      // Prompt Instruksi untuk AI agar fokus ke Kedinasan
+      final prompt = "Anda adalah pakar informasi sekolah kedinasan di Indonesia (seperti STAN, IPDN, STIS, Poltekip, dll). Tolong jawab pertanyaan ini dengan jelas: $text";
+      
+      final content = [Content.text(prompt)];
       final response = await model.generateContent(content);
-      
+
       setState(() {
-        _messages.add({
-          "role": "ai", 
-          "text": response.text ?? "Maaf, asisten AI tidak memberikan respon."
-        });
+        _messages.add({"role": "ai", "text": response.text ?? "Maaf, saya tidak bisa menemukan informasi tersebut."});
       });
     } catch (e) {
-      _showError("Gagal terhubung ke AI. Cek koneksi internet.");
+      setState(() {
+        _messages.add({"role": "ai", "text": "Error: Pastikan API Key benar dan koneksi internet aktif."});
+      });
     } finally {
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+        _controller.clear();
+      });
     }
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        // Judul disesuaikan dengan pencarian di widget_test.dart
-        title: const Text("KediNav AI Consultant", style: TextStyle(color: Colors.white, fontSize: 18)),
-        backgroundColor: Colors.indigo,
-        elevation: 2,
+        title: const Text("Info Kedinasan AI", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.indigo.shade900,
+        elevation: 4,
       ),
       body: Column(
         children: [
           Expanded(
-            child: _messages.isEmpty 
-              ? const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(20.0),
-                    // TEKS INI WAJIB SAMA PERSIS DENGAN YANG ADA DI TEST
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _messages.length,
+              itemBuilder: (context, index) {
+                final msg = _messages[index];
+                bool isUser = msg["role"] == "user";
+                return Align(
+                  alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 6),
+                    padding: const EdgeInsets.all(14),
+                    constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+                    decoration: BoxDecoration(
+                      color: isUser ? Colors.indigo.shade600 : Colors.grey.shade200,
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(16),
+                        topRight: const Radius.circular(16),
+                        bottomLeft: Radius.circular(isUser ? 16 : 0),
+                        bottomRight: Radius.circular(isUser ? 0 : 16),
+                      ),
+                    ),
                     child: Text(
-                      "Silakan tanya seputar info kedinasan (STAN, IPDN, STIS, dll)",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey, fontSize: 16),
+                      msg["text"]!,
+                      style: TextStyle(color: isUser ? Colors.white : Colors.black87),
                     ),
                   ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _messages.length,
-                  itemBuilder: (context, index) {
-                    final msg = _messages[index];
-                    bool isUser = msg["role"] == "user";
-                    return Align(
-                      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(vertical: 5),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: isUser ? Colors.indigo[100] : Colors.grey[200],
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        constraints: BoxConstraints(
-                          maxWidth: MediaQuery.of(context).size.width * 0.75
-                        ),
-                        child: Text(msg["text"]!),
-                      ),
-                    );
-                  },
-                ),
+                );
+              },
+            ),
           ),
           if (_isLoading) const LinearProgressIndicator(),
-          // Input Field
-          Padding(
-            padding: const EdgeInsets.all(12.0),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)]),
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _controller,
-                    onSubmitted: (_) => _sendMessage(),
-                    decoration: InputDecoration(
-                      hintText: "Tanya syarat STAN / IPDN...",
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(25)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                    decoration: const InputDecoration(
+                      hintText: "Tanya syarat pendaftaran...",
+                      border: InputBorder.none,
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                FloatingActionButton(
+                IconButton(
+                  icon: const Icon(Icons.send_rounded, color: Colors.indigo),
                   onPressed: _sendMessage,
-                  mini: true,
-                  child: const Icon(Icons.send),
                 ),
               ],
             ),

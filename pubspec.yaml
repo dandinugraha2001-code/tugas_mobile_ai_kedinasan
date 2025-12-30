@@ -1,7 +1,6 @@
-name: kedinav_ai
-description: "Aplikasi Info Kedinasan Berbasis AI untuk Tugas Pemrograman Mobile II"
-# Menandakan proyek ini tidak akan dipublikasikan ke pub.dev
-publish_to: 'none' 
+name: flutter_application_ai
+description: "Aplikasi Mobile Informasi Kedinasan Berbasis Google Gemini AI"
+publish_to: 'none'
 
 version: 1.0.0+1
 
@@ -12,11 +11,9 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.6
-  
-  # Library utama untuk integrasi Google Gemini AI
+  # Library utama Gemini AI
   google_generative_ai: ^0.4.0
-  
-  # Library untuk membaca file .env agar API Key aman
+  # Untuk membaca file .env
   flutter_dotenv: ^5.1.0
 
 dev_dependencies:
@@ -27,6 +24,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # PENTING: File .env harus didaftarkan di sini agar tidak error layar putih
+  # WAJIB: Daftarkan file .env agar bisa dibaca aplikasi
   assets:
     - .env

@@ -1,34 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:kedinav_ai/main.dart'; // Pastikan nama package sesuai dengan pubspec.yaml Anda
+import 'package:flutter_application_ai/main.dart'; 
 
 void main() {
-  testWidgets('KediNav AI Smoke Test', (WidgetTester tester) async {
-    // Mock loading .env agar test tidak error karena file tidak ditemukan
+  // Fungsi untuk menyiapkan lingkungan testing
+  setUpAll(() async {
+    // Memberikan nilai default palsu agar dotenv tidak error saat testing
     dotenv.testLoad(fileInput: 'GEMINI_API_KEY=test_key');
+  });
 
-    // Membangun aplikasi
-    await tester.pumpWidget(const KediNavApp());
+  testWidgets('Memastikan UI Info Kedinasan muncul dengan benar', (WidgetTester tester) async {
+    // 1. Jalankan aplikasi
+    await tester.pumpWidget(const InfoKedinasanApp());
 
-    // 1. Memastikan judul AppBar muncul
-    expect(find.text('KediNav AI Consultant'), findsOneWidget);
+    // 2. Verifikasi judul di AppBar sesuai main.dart terbaru
+    expect(find.text('Info Kedinasan AI'), findsOneWidget);
 
-    // 2. Memastikan pesan sambutan awal muncul
-    expect(find.text('Silakan tanya seputar info kedinasan (STAN, IPDN, STIS, dll)'), findsOneWidget);
+    // 3. Verifikasi bahwa TextField tersedia
+    expect(find.byType(TextField), findsOneWidget);
 
-    // 3. Mencoba mengetik di TextField
-    final textField = find.byType(TextField);
-    expect(textField, findsOneWidget);
+    // 4. Verifikasi tombol kirim (Icons.send_rounded)
+    expect(find.byIcon(Icons.send_rounded), findsOneWidget);
+  });
+
+  testWidgets('Simulasi mengetik pertanyaan kedinasan', (WidgetTester tester) async {
+    await tester.pumpWidget(const InfoKedinasanApp());
+
+    // Ketik pertanyaan
+    await tester.enterText(find.byType(TextField), 'Apa syarat masuk STAN?');
     
-    await tester.enterText(textField, 'Syarat masuk STAN');
-    expect(find.text('Syarat masuk STAN'), findsOneWidget);
-
-    // 4. Memastikan tombol kirim ada
-    expect(find.byIcon(Icons.send), findsOneWidget);
+    // Pastikan teks muncul di layar
+    expect(find.text('Apa syarat masuk STAN?'), findsOneWidget);
     
-    // Tap tombol send
-    await tester.tap(find.byIcon(Icons.send));
-    await tester.pump(); // Memberi waktu frame untuk update
+    // Simulasi tekan tombol kirim
+    await tester.tap(find.byIcon(Icons.send_rounded));
+    
+    // Rebuild UI setelah aksi
+    await tester.pump();
   });
 }
