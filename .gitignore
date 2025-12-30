@@ -37,4 +37,3 @@ android/app/src/main/res/values/google-services.xml
 .DS_Store
 
 # Web related
-.env

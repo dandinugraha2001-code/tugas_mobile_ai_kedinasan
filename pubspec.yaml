@@ -15,6 +15,7 @@ dependencies:
   google_generative_ai: ^0.4.0
   # Untuk membaca file .env
   flutter_dotenv: ^5.1.0
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:
