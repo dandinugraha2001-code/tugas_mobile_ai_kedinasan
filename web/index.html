@@ -7,12 +7,12 @@
     <script type="module">
       import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
 
-      // PERBAIKAN: API Key harus diapit tanda kutip " "
+      // PERBAIKAN: API Key sekarang menggunakan tanda kutip agar terbaca sebagai teks
       const genAI = new GoogleGenerativeAI("AIzaSyCB6IAsQ7X66U_-BtcL6AbiziFnX1TGReI");
 
       window.sendToGemini = async function (text) {
         try {
-          // Model gemini-1.5-flash sudah benar
+          // Menggunakan model gemini-1.5-flash untuk menghindari error 404
           const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
           const prompt =
@@ -23,7 +23,7 @@
           const response = await result.response;
           return response.text();
         } catch (e) {
-          // Akan menampilkan pesan error ke UI jika gagal
+          // Menampilkan pesan error jika terjadi kegagalan koneksi atau API
           return "❌ Error API: " + e.message;
         }
       };
